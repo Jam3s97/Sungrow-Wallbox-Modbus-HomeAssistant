@@ -1,7 +1,7 @@
 # Home Assistant Sungrow wallbox integration
 # https://github.com/Louisbertelsmann/Sungrow-Wallbox-Modbus-HomeAssistant
 # by Louis Bertelsmann
-# last update: 2025-11-06
+# last update: 2026-01-31
 
 modbus:
   - name: SungrowACx
@@ -104,53 +104,54 @@ modbus:
         scale: 0.1
         scan_interval: 600
 
-      - name: Phase B charging voltage
-        unique_id: wb1_phase_b_charging_voltage
-        slave: !secret wallbox_modbus_slave
-        address: 21303 # reg: 21304
-        input_type: input
-        data_type: uint16
-        unit_of_measurement: V
-        device_class: Voltage
-        state_class: measurement
-        scale: 0.1
-        scan_interval: 600
+      # I only have single Phase 
+      #- name: Phase B charging voltage
+      #  unique_id: wb1_phase_b_charging_voltage
+      #  slave: !secret wallbox_modbus_slave
+      #  address: 21303 # reg: 21304
+      #  input_type: input
+      #  data_type: uint16
+      #  unit_of_measurement: V
+      #  device_class: Voltage
+      #  state_class: measurement
+      #  scale: 0.1
+      #  scan_interval: 600
 
-      - name: Phase B charging current
-        unique_id: wb1_phase_b_charging_current
-        slave: !secret wallbox_modbus_slave
-        address: 21304 # reg: 21305
-        input_type: input
-        data_type: uint16
-        unit_of_measurement: A
-        device_class: Current
-        state_class: measurement
-        scale: 0.1
-        scan_interval: 600
+      #- name: Phase B charging current
+      #  unique_id: wb1_phase_b_charging_current
+      #  slave: !secret wallbox_modbus_slave
+      #  address: 21304 # reg: 21305
+      #  input_type: input
+      #  data_type: uint16
+      #  unit_of_measurement: A
+      #  device_class: Current
+      #  state_class: measurement
+      #  scale: 0.1
+      #  scan_interval: 600
 
-      - name: Phase C charging voltage
-        unique_id: wb1_phase_c_charging_voltage
-        slave: !secret wallbox_modbus_slave
-        address: 21305 # reg: 21306
-        input_type: input
-        data_type: uint16
-        unit_of_measurement: V
-        device_class: Voltage
-        state_class: measurement
-        scale: 0.1
-        scan_interval: 600
+      #- name: Phase C charging voltage
+      #  unique_id: wb1_phase_c_charging_voltage
+      #  slave: !secret wallbox_modbus_slave
+      #  address: 21305 # reg: 21306
+      #  input_type: input
+      #  data_type: uint16
+      #  unit_of_measurement: V
+      #  device_class: Voltage
+      #  state_class: measurement
+      #  scale: 0.1
+      #  scan_interval: 600
 
-      - name: Phase C charging current
-        unique_id: wb1_phase_c_charging_current
-        slave: !secret wallbox_modbus_slave
-        address: 21306 # reg 21307
-        input_type: input
-        data_type: uint16
-        unit_of_measurement: A
-        device_class: Current
-        state_class: measurement
-        scale: 0.1
-        scan_interval: 600
+      #- name: Phase C charging current
+      #  unique_id: wb1_phase_c_charging_current
+      #  slave: !secret wallbox_modbus_slave
+      #  address: 21306 # reg 21307
+      #  input_type: input
+      #  data_type: uint16
+      #  unit_of_measurement: A
+      #  device_class: Current
+      #  state_class: measurement
+      #  scale: 0.1
+      #  scan_interval: 600
 
       - name: Charging power
         unique_id: wb1_charging_power
@@ -232,7 +233,8 @@ modbus:
         data_type: uint16
         scan_interval: 60
 
-      - name: Charger enable raw
+# updated to have wb_ in the sensor as it clashed with my IHM Charger Enable Entity
+      - name: WB Charger enable raw
         unique_id: wb1_charger_enable_raw
         slave: !secret wallbox_modbus_slave
         address: 21210 # reg 21211
@@ -382,24 +384,26 @@ template:
             Unknown start mode!
           {% endif %}
           
+# updated to have wb_ in the sensor as it clashed with my IHM Charger Enable Entity
       - name: Charger enable
         unique_id: wb1_charger_enable
         availability:
-          "{{states('sensor.charger_enable_raw')|is_number}}"
+          "{{states('sensor.wb_charger_enable_raw')|is_number}}"
         state: >-
-          {% if ((states('sensor.charger_enable_raw') | int(default=0)) == 0) %}
+          {% if ((states('sensor.wb_charger_enable_raw') | int(default=0)) == 0) %}
             Disabled
-          {% elif ((states('sensor.charger_enable_raw') | int(default=0))  == 1) %}
+          {% elif ((states('sensor.wb_charger_enable_raw') | int(default=0))  == 1) %}
             Enabled
           {% else %}
             Unknown charger enable mode!
           {% endif %}
 
+# updated to 32amp max for single phase
 input_number:
   set_wb1_output_current:
     name: Set output current
     min: 6
-    max: 63
+    max: 32
     initial: 16
     step: 0.1
 
@@ -409,13 +413,13 @@ input_number:
     max: 500
     mode: box
     step: 0.1
-
-input_select:
-  set_wb_phase_switch:
-    name: Phase switch
-    options:
-      - "Three phase"
-      - "Single phase"
+# not needed for single phase
+#input_select:
+#  set_wb_phase_switch:
+#    name: Phase switch
+#    options:
+#      - "Three phase"
+#      - "Single phase"
 
   set_wb_charger_enable:
     name: Charger enable
@@ -538,62 +542,63 @@ automation:
           value: "{{ states('sensor.mileage_per_kwh') }}"
     mode: single
 
-  - id: "automation_wallbox_change_phase_switch_cmd"
-    alias: "wallbox change phase switch cmd"
-    description: "Switch wallbox operation mode between Single- and Three-phase mode"
-    trigger:
-      - platform: state
-        entity_id:
-          - input_select.set_wb_phase_switch
-    condition:
-      - condition: template
-        value_template: >-
-          {{ states('input_select.set_wb_phase_switch') != states('sensor.phase_switching_status') }}
-    variables:
-      three_phase: 0
-      single_phase: 1
-    action:
-      - service: modbus.write_register
-        data_template:
-          hub: SungrowACx
-          slave: !secret wallbox_modbus_slave
-          address: 21203 # reg 21204
-          value: >
-            {% if is_state('input_select.set_wb_phase_switch', "Three phase") %} 
-              {{three_phase}}
-            {% elif is_state('input_select.set_wb_phase_switch', "Single phase") %} 
-              {{single_phase}}
-            {% endif %}
-      - delay:
-          hours: 0
-          minutes: 0
-          seconds: 10
-          milliseconds: 0
-      - service: homeassistant.update_entity
-        data: {}
-        target:
-          entity_id: sensor.single_phase_three_phase_switching
-    mode: single
+# Not needed for single phase
+#  - id: "automation_wallbox_change_phase_switch_cmd"
+#    alias: "wallbox change phase switch cmd"
+#    description: "Switch wallbox operation mode between Single- and Three-phase mode"
+#    trigger:
+#      - platform: state
+#        entity_id:
+#          - input_select.set_wb_phase_switch
+#    condition:
+#      - condition: template
+#        value_template: >-
+#          {{ states('input_select.set_wb_phase_switch') != states('sensor.phase_switching_status') }}
+#    variables:
+#      three_phase: 0
+#      single_phase: 1
+#    action:
+#      - service: modbus.write_register
+#        data_template:
+#          hub: SungrowACx
+#          slave: !secret wallbox_modbus_slave
+#          address: 21203 # reg 21204
+#          value: >
+#            {% if is_state('input_select.set_wb_phase_switch', "Three phase") %} 
+#              {{three_phase}}
+#            {% elif is_state('input_select.set_wb_phase_switch', "Single phase") %} 
+#              {{single_phase}}
+#            {% endif %}
+#      - delay:
+#          hours: 0
+#          minutes: 0
+#          seconds: 10
+#          milliseconds: 0
+#      - service: homeassistant.update_entity
+#        data: {}
+#        target:
+#          entity_id: sensor.single_phase_three_phase_switching
+#    mode: single
     
-  - id: "automation_wallbox_change_phase_switch_cmd_update"
-    alias: "wallbox change phase switch cmd update"
-    description: "Switch wallbox operation mode between Single- and Three-phase mode update"
-    trigger:
-      - platform: homeassistant
-        event: start
-      - platform: state
-        entity_id:
-          - sensor.single_phase_three_phase_switching
-    condition:
-      - condition: template
-        value_template: "{{ not is_state('sensor.single_phase_three_phase_switching', 'unavailable') }}"
-    action:
-      - service: input_select.select_option
-        target:
-          entity_id: input_select.set_wb_phase_switch
-        data:
-          option: "{{ states('sensor.phase_switching_status') }}"
-    mode: single
+#  - id: "automation_wallbox_change_phase_switch_cmd_update"
+#    alias: "wallbox change phase switch cmd update"
+#    description: "Switch wallbox operation mode between Single- and Three-phase mode update"
+#    trigger:
+#      - platform: homeassistant
+#        event: start
+#      - platform: state
+#        entity_id:
+#          - sensor.single_phase_three_phase_switching
+#    condition:
+#      - condition: template
+#        value_template: "{{ not is_state('sensor.single_phase_three_phase_switching', 'unavailable') }}"
+#    action:
+#      - service: input_select.select_option
+#        target:
+#          entity_id: input_select.set_wb_phase_switch
+#        data:
+#          option: "{{ states('sensor.phase_switching_status') }}"
+#    mode: single
   
   - id: "automation_wallbox_charger_enable_cmd"
     alias: "wallbox charger enable cmd"
@@ -640,7 +645,7 @@ automation:
         event: start
       - platform: state
         entity_id:
-          - sensor.charger_enable_raw
+          - sensor.wb_charger_enable_raw
     condition:
       - condition: template
         value_template: "{{ not is_state('sensor.charger_enable', 'unavailable') }}"
@@ -777,10 +782,10 @@ automation:
                   - sensor.charging_power
                   - sensor.phase_a_charging_current
                   - sensor.phase_a_charging_voltage
-                  - sensor.phase_b_charging_current
-                  - sensor.phase_b_charging_voltage
-                  - sensor.phase_c_charging_current
-                  - sensor.phase_c_charging_voltage
+#                  - sensor.phase_b_charging_current
+#                  - sensor.phase_b_charging_voltage
+#                  - sensor.phase_c_charging_current
+#                  - sensor.phase_c_charging_voltage
                   - sensor.output_current_setting
                   - sensor.charging_energy
                   - sensor.charging_end_time_raw
