@@ -413,8 +413,10 @@ input_number:
     max: 500
     mode: box
     step: 0.1
+
+input_select:
+
 # not needed for single phase
-#input_select:
 #  set_wb_phase_switch:
 #    name: Phase switch
 #    options:
