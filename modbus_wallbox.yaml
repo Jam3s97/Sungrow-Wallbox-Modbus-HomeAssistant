@@ -1,7 +1,7 @@
 # Home Assistant Sungrow wallbox integration
 # https://github.com/Louisbertelsmann/Sungrow-Wallbox-Modbus-HomeAssistant
 # by Louis Bertelsmann
-# last update: 2026-01-31
+# last update: 2025-11-06
 
 modbus:
   - name: SungrowACx
@@ -39,6 +39,14 @@ modbus:
         unique_id: wb1_phase_switching_status_raw
         slave: !secret wallbox_modbus_slave
         address: 21269 # reg 21270
+        input_type: input
+        data_type: uint16
+        scan_interval: 60
+        
+      - name: Remote control status
+        unique_id: wb1_remote_ctrl_status
+        slave: !secret wallbox_modbus_slave
+        address: 21267 # reg 21268
         input_type: input
         data_type: uint16
         scan_interval: 60
@@ -210,6 +218,22 @@ modbus:
         input_type: input
         data_type: uint16
         scan_interval: 600
+        
+      - name: Power request
+        unique_id: wb1_power_request
+        slave: !secret wallbox_modbus_slave
+        address: 21314 # reg 21315
+        input_type: input
+        data_type: uint16
+        scan_interval: 30
+
+      - name: Power flag
+        unique_id: wb1_power_flag
+        slave: !secret wallbox_modbus_slave
+        address: 21315 # reg 21316
+        input_type: input
+        data_type: uint16
+        scan_interval: 30
 
       #####################
       # holding registers
@@ -233,8 +257,7 @@ modbus:
         data_type: uint16
         scan_interval: 60
 
-# updated to have wb_ in the sensor as it clashed with my IHM Charger Enable Entity
-      - name: WB Charger enable raw
+      - name: Charger enable raw
         unique_id: wb1_charger_enable_raw
         slave: !secret wallbox_modbus_slave
         address: 21210 # reg 21211
@@ -265,7 +288,7 @@ modbus:
         unique_id: wb1_working_mode
         slave: !secret wallbox_modbus_slave
         address: 21262 # reg 21263
-        input_type: holding
+        input_type: input
         data_type: uint16
         scan_interval: 600
 
@@ -325,6 +348,8 @@ template:
             Plug and Play
           {% elif ((states('sensor.working_mode') | int(default=0)) == 6) %}
             EMS
+          {% elif ((states('sensor.working_mode') | int(default=0)) == 320) %}
+            Maybe Network
           {% else %}
             Unknown working mode!
           {% endif %}
@@ -380,11 +405,12 @@ template:
             Start with EMS
           {% elif ((states('sensor.start_mode_raw') | int(default=0)) == 2) %}
             Start by swiping
+          {% elif ((states('sensor.start_mode_raw') | int(default=0)) == 3) %}
+            Start by Plug and Play
           {% else %}
             Unknown start mode!
           {% endif %}
           
-# updated to have wb_ in the sensor as it clashed with my IHM Charger Enable Entity
       - name: Charger enable
         unique_id: wb1_charger_enable
         availability:
@@ -453,6 +479,7 @@ automation:
       - platform: state
         entity_id:
           - input_number.set_wb1_output_current
+        to: null
     condition:
       - condition: template
         value_template: >-
@@ -484,6 +511,7 @@ automation:
       - platform: state
         entity_id:
           - sensor.output_current_setting
+        to: null
     condition:
       - condition: template
         value_template: "{{ not is_state('sensor.output_current_setting', 'unavailable') }}"
@@ -502,6 +530,7 @@ automation:
       - platform: state
         entity_id:
           - input_number.set_wb1_mileage_per_kwh
+        to: null
     condition:
       - condition: template
         value_template: >-
@@ -533,6 +562,7 @@ automation:
       - platform: state
         entity_id:
           - sensor.mileage_per_kwh
+        to: null
     condition:
       - condition: template
         value_template: "{{ not is_state('sensor.mileage_per_kwh', 'unavailable') }}"
@@ -609,6 +639,7 @@ automation:
       - platform: state
         entity_id:
           - input_select.set_wb_charger_enable
+        to: null
     condition:
       - condition: template
         value_template: >-
@@ -648,6 +679,7 @@ automation:
       - platform: state
         entity_id:
           - sensor.wb_charger_enable_raw
+        to: null
     condition:
       - condition: template
         value_template: "{{ not is_state('sensor.charger_enable', 'unavailable') }}"
@@ -661,7 +693,7 @@ automation:
 
   - id: "automation_wallbox_start_charging"
     alias: "wallbox charger start remote control cmd"
-    description: "Remote control wallbox"
+    description: "Remote control wallbox - sets availability first, then starts"
     trigger:
       - platform: state
         entity_id:
@@ -669,13 +701,20 @@ automation:
     condition: []
     variables:
       start_charging: 0
-      stop_charging: 1
     action:
       - service: modbus.write_register
         data_template:
           hub: SungrowACx
           slave: !secret wallbox_modbus_slave
-          address: 21211 # reg 21212
+          address: 21210 # reg 21211 - set Available first
+          value: 1
+      - delay:
+          seconds: 1
+      - service: modbus.write_register
+        data_template:
+          hub: SungrowACx
+          slave: !secret wallbox_modbus_slave
+          address: 21211 # reg 21212 - then Start
           value: >
               {{start_charging}}
     mode: single
@@ -708,6 +747,7 @@ automation:
       - platform: state
         entity_id:
           - input_select.set_wb_working_mode
+        to: null
     condition:
       - condition: template
         value_template: >-
@@ -750,6 +790,7 @@ automation:
       - platform: state
         entity_id:
           - sensor.working_mode
+        to: null
     condition:
       - condition: template
         value_template: "{{ not is_state('sensor.working_mode', 'unavailable') }}"
