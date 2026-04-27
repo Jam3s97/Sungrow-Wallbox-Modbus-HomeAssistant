@@ -60,3 +60,52 @@ views:
           - entity: sensor.charger_enable
           - entity: sensor.wallbox_device_type_code
         title: Raw
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Charging Current
+          show_states: true
+          colorize_states: true
+        graph_span: |
+          [[[
+            const hours = parseFloat(states['sensor.charging_duration'].state);
+            if (!hours || isNaN(hours)) return '1h';
+            return (Math.ceil(hours * 10) / 10) + 'h';
+          ]]]
+        update_interval: 15s
+        series:
+          - entity: sensor.output_current_setting
+            name: Output Current Setting
+            color: '#f4a261'
+            stroke_width: 2
+            type: line
+            curve: smooth
+            show:
+              legend_value: true
+              in_header: true
+          - entity: sensor.phase_a_charging_current
+            name: Phase A Charging Current
+            color: '#2196f3'
+            stroke_width: 2
+            type: line
+            curve: smooth
+            show:
+              legend_value: true
+              in_header: true
+        apex_config:
+          chart:
+            height: 250
+          yaxis:
+            min: 0
+            labels:
+              formatter: |
+                EVAL:function(val) { return val.toFixed(1) + ' A' }
+          tooltip:
+            x:
+              format: HH:mm:ss
+          xaxis:
+            labels:
+              format: HH:mm
+      - type: entities
+        entities:
+          - input_number.id_buzz_target_state_of_charge
